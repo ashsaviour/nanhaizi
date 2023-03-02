@@ -1,25 +1,28 @@
 # nanhaizi
 
-#### 介绍
+## 介绍
 一个chatbot项目
 
-#### 软件架构
-软件架构说明
+## 项目架构
+#### 主机
+- Host: 34.85.47.131
+- Ubuntu 18.04.6 LTS
+- 2 vCPU + 8 GB memory
+- 40 GB balanced persistent disk	
+- Ends April 28, 2023
 
+#### 迁移脚本
+- 因为主机是白嫖的，寿命最长3个月，所以我们需要一个迁移/快速部署脚本
+- 同时注意尽量不要将重要文件存入主机，文件存入时应注意在gitee中备份
 
-#### 安装教程
+#### 数据库
+mysql?
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+#### 聊天机器人项目
+?
 
-#### 使用说明
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 参与贡献
+## 使用说明
+## 参与贡献
 
 1.  Fork 本仓库
 2.  新建 Feat_xxx 分支
@@ -27,7 +30,7 @@
 4.  新建 Pull Request
 
 
-#### 特技
+## 特技
 
 1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
 2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
