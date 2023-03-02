@@ -5,7 +5,7 @@
 
 ## 项目架构
 #### 主机
-- Host: 34.85.47.131
+- Host: host.ashsaviour.xyz
 - Ubuntu 18.04.6 LTS
 - 2 vCPU + 8 GB memory
 - 40 GB balanced persistent disk	
@@ -22,6 +22,8 @@ mysql?
 ?
 
 ## 使用说明
+[使用VSCode Remote SSH连接到主机](/tutorials/remotessh_%20tutorial/remotessh_%20tutorial.md)
+
 ## 参与贡献
 
 1.  Fork 本仓库
