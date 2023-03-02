@@ -1,0 +1,5 @@
+Host instance-play
+  HostName host.ashsaviour.xyz
+  IdentityFile D:\ssh\gcp-ssh-key
+  User ashsaviour202301
+  
