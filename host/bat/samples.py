@@ -1,13 +1,72 @@
-from google.api_core.extended_operation import ExtendedOperation
-import warnings
-from typing import Any, List
-import sys
-import re
-import requests
-import json
-import samples
+# Guides，samples for Compute Engine https://cloud.google.com/compute/docs
+from collections import defaultdict
+from typing import Dict, Iterable
+
 from google.cloud import compute_v1
+
+
+def list_all_instances(
+    project_id: str,
+) -> Dict[str, Iterable[compute_v1.Instance]]:
+    """
+    Returns a dictionary of all instances present in a project, grouped by their zone.
+
+    Args:
+        project_id: project ID or project number of the Cloud project you want to use.
+    Returns:
+        A dictionary with zone names as keys (in form of "zones/{zone_name}") and
+        iterable collections of Instance objects as values.
+    """
+    instance_client = compute_v1.InstancesClient()
+    request = compute_v1.AggregatedListInstancesRequest()
+    request.project = project_id
+    # Use the `max_results` parameter to limit the number of results that the API returns per response page.
+    request.max_results = 50
+
+    agg_list = instance_client.aggregated_list(request=request)
+
+    all_instances = defaultdict(list)
+    print("Instances found:")
+    # Despite using the `max_results` parameter, you don't need to handle the pagination
+    # yourself. The returned `AggregatedListPager` object handles pagination
+    # automatically, returning separated pages as you iterate over the results.
+    for zone, response in agg_list:
+        if response.instances:
+            all_instances[zone].extend(response.instances)
+            print(f" {zone}:")
+            for instance in response.instances:
+                print(f" - {instance.name} ({instance.machine_type})")
+    return all_instances
+
+from typing import Iterable
+
+from google.cloud import compute_v1
+
+
+def list_firewall_rules(project_id: str) -> Iterable[compute_v1.Firewall]:
+    """
+    Return a list of all the firewall rules in specified project. Also prints the
+    list of firewall names and their descriptions.
+
+    Args:
+        project_id: project ID or project number of the Cloud project you want to use.
+
+    Returns:
+        A flat list of all firewall rules defined for given project.
+    """
+    firewall_client = compute_v1.FirewallsClient()
+    firewalls_list = firewall_client.list(project=project_id)
+
+    for firewall in firewalls_list:
+        print(f" - {firewall.name}: {firewall.description}")
+
+    return firewalls_list
+
+import sys
 from typing import Any
+
+from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1
 
 
 def wait_for_extended_operation(
@@ -51,13 +110,119 @@ def wait_for_extended_operation(
         raise operation.exception() or RuntimeError(operation.error_message)
 
     if operation.warnings:
-        print(f"Warnings during {verbose_name}:\n",
-              file=sys.stderr, flush=True)
+        print(f"Warnings during {verbose_name}:\n", file=sys.stderr, flush=True)
         for warning in operation.warnings:
-            print(f" - {warning.code}: {warning.message}",
-                  file=sys.stderr, flush=True)
+            print(f" - {warning.code}: {warning.message}", file=sys.stderr, flush=True)
 
     return result
+
+
+def patch_firewall_priority(
+    project_id: str, firewall_rule_name: str, priority: int
+) -> None:
+    """
+    Modifies the priority of a given firewall rule.
+
+    Args:
+        project_id: project ID or project number of the Cloud project you want to use.
+        firewall_rule_name: name of the rule you want to modify.
+        priority: the new priority to be set for the rule.
+    """
+    firewall_rule = compute_v1.Firewall()
+    firewall_rule.priority = priority
+
+    # The patch operation doesn't require the full definition of a Firewall object. It will only update
+    # the values that were set in it, in this case it will only change the priority.
+    firewall_client = compute_v1.FirewallsClient()
+    operation = firewall_client.patch(
+        project=project_id, firewall=firewall_rule_name, firewall_resource=firewall_rule
+    )
+
+    wait_for_extended_operation(operation, "firewall rule patching")
+
+def create_firewall_rule(
+    project_id: str, firewall_rule_name: str, network: str = "global/networks/default"
+) -> compute_v1.Firewall:
+    """
+    Creates a simple firewall rule allowing for incoming HTTP and HTTPS access from the entire Internet.
+
+    Args:
+        project_id: project ID or project number of the Cloud project you want to use.
+        firewall_rule_name: name of the rule that is created.
+        network: name of the network the rule will be applied to. Available name formats:
+            * https://www.googleapis.com/compute/v1/projects/{project_id}/global/networks/{network}
+            * projects/{project_id}/global/networks/{network}
+            * global/networks/{network}
+
+    Returns:
+        A Firewall object.
+    """
+    firewall_rule = compute_v1.Firewall()
+    firewall_rule.name = firewall_rule_name
+    firewall_rule.direction = "INGRESS"
+
+    allowed_ports = compute_v1.Allowed()
+    allowed_ports.I_p_protocol = "tcp"
+    allowed_ports.ports = ["80", "443"]
+
+    firewall_rule.allowed = [allowed_ports]
+    firewall_rule.source_ranges = ["0.0.0.0/0"]
+    firewall_rule.network = network
+    firewall_rule.description = "Allowing TCP traffic on port 80 and 443 from Internet."
+
+    firewall_rule.target_tags = ["web"]
+
+    # Note that the default value of priority for the firewall API is 1000.
+    # If you check the value of `firewall_rule.priority` at this point it
+    # will be equal to 0, however it is not treated as "set" by the library and thus
+    # the default will be applied to the new rule. If you want to create a rule that
+    # has priority == 0, you need to explicitly set it so:
+    # TODO: Uncomment to set the priority to 0
+    # firewall_rule.priority = 0
+
+    firewall_client = compute_v1.FirewallsClient()
+    operation = firewall_client.insert(
+        project=project_id, firewall_resource=firewall_rule
+    )
+
+    wait_for_extended_operation(operation, "firewall rule creation")
+
+    return firewall_client.get(project=project_id, firewall=firewall_rule_name)
+
+import google.cloud.compute_v1 as compute_v1
+
+def print_images_list(project: str) -> str:
+    """
+    Prints a list of all non-deprecated image names available in given project.
+
+    Args:
+        project: project ID or project number of the Cloud project you want to list images from.
+
+    Returns:
+        The output as a string.
+    """
+    images_client = compute_v1.ImagesClient()
+    # Listing only non-deprecated images to reduce the size of the reply.
+    images_list_request = compute_v1.ListImagesRequest(
+        project=project, max_results=100, filter="deprecated.state != DEPRECATED",
+        )
+    output = []
+
+    # Although the `max_results` parameter is specified in the request, the iterable returned
+    # by the `list()` method hides the pagination mechanic. The library makes multiple
+    # requests to the API for you, so you can simply iterate over all the images.
+    for img in images_client.list(request=images_list_request):
+        print(f" -  {img.name}")
+        output.append(f" -  {img.name}")
+    return "\n".join(output)
+
+import re
+import sys
+from typing import Any, List
+import warnings
+
+from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1
 
 
 def get_image_from_family(project: str, family: str) -> compute_v1.Image:
@@ -246,7 +411,6 @@ def create_instance(
     print(f"Instance {instance_name} created.")
     return instance_client.get(project=project_id, zone=zone, instance=instance_name)
 
-
 def delete_instance(project_id: str, zone: str, machine_name: str) -> None:
     """
     Send an instance deletion request to the Compute Engine API and wait for it to complete.
@@ -265,58 +429,4 @@ def delete_instance(project_id: str, zone: str, machine_name: str) -> None:
     wait_for_extended_operation(operation, "instance deletion")
     print(f"Instance {machine_name} deleted.")
 
-
-def set_startup_script(
-    project: str,
-    zone: str,
-    instance_name: str,
-    script: str,
-    fingerprint: str = None,
-) -> None:
-    # Set metadata https://cloud.google.com/python/docs/reference/compute/latest/google.cloud.compute_v1.services.instances.InstancesClient?hl=en#google_cloud_compute_v1_services_instances_InstancesClient_set_metadata
-    if fingerprint is None:
-        instance = compute_v1.InstancesClient().get(
-            project=project, zone=zone, instance=instance_name)
-        fingerprint = instance.metadata.fingerprint
-
-    body = {
-        "items": [{
-            "key": "startup-script",
-            "value": script
-        }],
-        "fingerprint": fingerprint
-    }
-
-    request = compute_v1.SetMetadataInstanceRequest()
-    request.zone = zone
-    request.project = project
-    request.instance = instance_name
-    request.metadata_resource = body
-    operation = compute_v1.InstancesClient().set_metadata(request=request)
-    wait_for_extended_operation(operation, "set startup script")
-
-
-def set_network_tags(
-    project: str,
-    zone: str,
-    instance_name: str,
-    networktags: list[str],
-    fingerprint: str = None,
-) -> None:
-    # Set tags https://cloud.google.com/python/docs/reference/compute/latest/google.cloud.compute_v1.services.instances.InstancesClient?hl=en#google_cloud_compute_v1_services_instances_InstancesClient_set_tags
-    if fingerprint is None:
-        instance = compute_v1.InstancesClient().get(
-            project=project, zone=zone, instance=instance_name)
-        fingerprint = instance.tags.fingerprint
-
-    body = {
-        "items": networktags,
-        "fingerprint": fingerprint
-    }
-    request = compute_v1.SetTagsInstanceRequest()
-    request.zone = zone
-    request.project = project
-    request.instance = instance_name
-    request.tags_resource = body
-    operation = compute_v1.InstancesClient().set_tags(request=request)
-    wait_for_extended_operation(operation, "set network tags")
+    
