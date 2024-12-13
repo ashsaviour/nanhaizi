@@ -14,3 +14,5 @@ echo "new_port: $new_port"
 jq ".inbounds[0].port = $new_port" "$config_path" > temp.json
 sudo mv -f temp.json "$config_path"
 sudo systemctl restart v2ray
+
+#todo: make this to a daemon
