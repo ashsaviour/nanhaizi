@@ -3,9 +3,9 @@ import samples
 from google.cloud import compute_v1
 from typing import Any
 
-project = 'esoteric-kiln-376000'
+project = 'persuasive-zoo-436506-v8'
 
-def update_tcp_port(project: str = project, rule_name: str = "v2ray", ports: str = ["37880-37882"]) -> Any:
+def update_tcp_port(project: str = project, rule_name: str = "v2ray", ports: str = ["37880-37890"]) -> Any:
     ### update tcp port number
 
     firewall_rule = compute_v1.Firewall()
